@@ -1,79 +1,65 @@
 import streamlit as st
 
-st.set_page_config(page_title="Previsor de Set de Tênis", layout="centered")
+def prever_mercado_gols( minuto, placar_a, placar_b, odd_over15, odd_over25, finalizacoes_a, finalizacoes_b, chutes_alvo_a, chutes_alvo_b, xg_a, xg_b, ataques_perigosos_a, ataques_perigosos_b, posse_a, posse_b ): gols_total = placar_a + placar_b
 
-st.title("🎾 Previsor de Set - Tênis Ao Vivo")
+# Intensidade ofensiva
+intensidade_a = finalizacoes_a + chutes_alvo_a*2 + ataques_perigosos_a*0.5 + xg_a*10
+intensidade_b = finalizacoes_b + chutes_alvo_b*2 + ataques_perigosos_b*0.5 + xg_b*10
+intensidade_total = (intensidade_a + intensidade_b) / (minuto + 1)
 
-stats_labels = [
-    "1º Serviço (%)", "Pts Ganhos no 1º Serviço (%)",
-    "2º Serviço (%)", "Pts Ganhos no 2º Serviço (%)",
-    "Break Points Convertidos (%)", "Aces", "Duplas Faltas",
-    "Games Vencidos no Set"
-]
-weights = [1.2, 1.5, 1.0, 1.3, 1.4, 1.0, -1.2, 1.6]
+# Estimativa de probabilidade empírica
+prob_over15 = min(1.0, (intensidade_total / 3.0))
+prob_over25 = min(1.0, (intensidade_total / 4.5))
 
-st.markdown("#### 📋 Estatísticas dos Jogadores")
+# EV (valor esperado)
+ev_over15 = (prob_over15 * odd_over15) - 1
+ev_over25 = (prob_over25 * odd_over25) - 1
 
-col1, col2 = st.columns(2)
-a_vals = []
-b_vals = []
+# Quem deve marcar o próximo gol
+proporcao_a = intensidade_a / (intensidade_a + intensidade_b) if (intensidade_a + intensidade_b) > 0 else 0.5
+proporcao_b = 1 - proporcao_a
 
-with col1:
-    st.markdown("**Jogador A**")
-    for stat in stats_labels:
-        val = st.number_input(f"A - {stat}", value=0.0, format="%.1f", key=f"a_{stat}")
-        a_vals.append(val)
+return {
+    "prob_over15": prob_over15,
+    "prob_over25": prob_over25,
+    "ev_over15": ev_over15,
+    "ev_over25": ev_over25,
+    "proximo_gol_a": proporcao_a,
+    "proximo_gol_b": proporcao_b,
+    "intensidade_a": intensidade_a,
+    "intensidade_b": intensidade_b,
+    "intensidade_total": intensidade_total
+}
 
-with col2:
-    st.markdown("**Jogador B**")
-    for stat in stats_labels:
-        val = st.number_input(f"B - {stat}", value=0.0, format="%.1f", key=f"b_{stat}")
-        b_vals.append(val)
+st.title("Bot de Gols ao Vivo - Futebol")
 
-st.divider()
+st.header("Informações da Partida") minuto = st.slider("Minuto de jogo", 1, 90, 30) placar_a = st.number_input("Gols Time A", 0) placar_b = st.number_input("Gols Time B", 0)
 
-linha = st.number_input("📏 Linha Over/Under (Games)", value=22.5, step=0.5)
-odd_over = st.number_input("🔼 Odd Over", value=1.80, step=0.01)
-odd_under = st.number_input("🔽 Odd Under", value=1.80, step=0.01)
+st.header("Odds do Mercado") odd_over15 = st.number_input("Odd Over 1.5", 1.01) odd_over25 = st.number_input("Odd Over 2.5", 1.01)
 
-st.divider()
+st.header("Estatísticas do Time A") finalizacoes_a = st.number_input("Finalizações Time A", 0) chutes_alvo_a = st.number_input("Chutes no Alvo Time A", 0) xg_a = st.number_input("xG Time A", 0.0) ataques_perigosos_a = st.number_input("Ataques Perigosos Time A", 0) posse_a = st.slider("Posse de Bola Time A (%)", 0, 100, 50)
 
-if st.button("🔍 Analisar"):
-    try:
-        weighted_a = sum([(a - b) * w for a, b, w in zip(a_vals, b_vals, weights)])
-        prob_a = max(0, min(100, 50 + weighted_a * 2))
-        prob_b = 100 - prob_a
+st.header("Estatísticas do Time B") finalizacoes_b = st.number_input("Finalizações Time B", 0) chutes_alvo_b = st.number_input("Chutes no Alvo Time B", 0) xg_b = st.number_input("xG Time B", 0.0) ataques_perigosos_b = st.number_input("Ataques Perigosos Time B", 0) posse_b = 100 - posse_a
 
-        eff_a = (a_vals[1] + a_vals[3]) / 2
-        eff_b = (b_vals[1] + b_vals[3]) / 2
-        total_games = a_vals[7] + b_vals[7]
+if st.button("Analisar Jogo"): resultado = prever_mercado_gols( minuto, placar_a, placar_b, odd_over15, odd_over25, finalizacoes_a, finalizacoes_b, chutes_alvo_a, chutes_alvo_b, xg_a, xg_b, ataques_perigosos_a, ataques_perigosos_b, posse_a, posse_b )
 
-        dominio_b = (b_vals[1] - a_vals[1]) + (b_vals[3] - a_vals[3]) + (b_vals[4] - a_vals[4]) + (b_vals[7] - a_vals[7])
-        estimativa_fechamento = total_games + (2 if dominio_b > 8 else 3 if dominio_b > 3 else 4)
+st.subheader("Resultados da Análise")
+st.write(f"🔥 Intensidade Time A: {resultado['intensidade_a']:.2f}")
+st.write(f"🔥 Intensidade Time B: {resultado['intensidade_b']:.2f}")
+st.write(f"⚡ Intensidade Total: {resultado['intensidade_total']:.2f}")
 
-        sugestao = "UNDER" if estimativa_fechamento < linha else "OVER"
+st.write(f"\n🎯 Over 1.5 → Prob: {resultado['prob_over15']*100:.1f}% | EV: {resultado['ev_over15']:.2f}")
+st.write(f"🎯 Over 2.5 → Prob: {resultado['prob_over25']*100:.1f}% | EV: {resultado['ev_over25']:.2f}")
 
-        st.markdown(f"""
-        ### 📊 Resultado da Análise
+if resultado['ev_over15'] > 0:
+    st.success("✅ Over 1.5 tem valor! Possível entrada.")
+else:
+    st.warning("❌ Over 1.5 sem valor no momento.")
 
-        **Probabilidades de vencer o SET atual:**
-        - 🟦 Jogador A: `{prob_a:.1f}%`
-        - 🟥 Jogador B: `{prob_b:.1f}%`
+if resultado['ev_over25'] > 0:
+    st.success("✅ Over 2.5 tem valor!")
+else:
+    st.warning("❌ Over 2.5 não compensa.")
 
-        **Probabilidades do JOGO final:**
-        - A: `{prob_a + 3:.1f}%`
-        - B: `{prob_b - 3:.1f}%`
+st.write(f"\n⚽ Próximo gol - Time A: {resultado['proximo_gol_a']*100:.1f}% | Time B: {resultado['proximo_gol_b']*100:.1f}%")
 
-        **Total de games jogados:** {int(total_games)}
-
-        **Eficiência média do saque:**
-        - A: `{eff_a:.1f}%`
-        - B: `{eff_b:.1f}%`
-
-        **Estimativa de fechamento do set:** `{estimativa_fechamento:.1f}` games  
-        **Linha fornecida:** `{linha}`
-
-        ✅ **Sugestão:** Apostar em **{sugestao} {linha}**
-        """)
-    except Exception as e:
-        st.error(f"Erro ao calcular: {e}")
